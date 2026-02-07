@@ -1,39 +1,50 @@
-Here is the clean, single-block content for your `setup.md` file. I’ve refined the formatting for better readability in GitHub or VS Code while keeping all your technical configurations intact.
+Here is an **updated, clean, and complete `README.md`** file that you can drop directly into your project root (`data-engineering-zoomcamp/`).
 
-Simply copy the entire block below:
+It includes:
+- Clear setup instructions for **PostgreSQL + pgAdmin**
+- Separate instructions for **starting Kestra** (recommended as a separate compose file)
+- Step-by-step guidance for both single-command and split-compose approaches
+- Useful commands, connection details, and troubleshooting
+- Folder structure recommendation
+- Security notice
+
+Copy-paste the content below into `README.md`:
 
 ```markdown
-# Setup Guide – Data Engineering Zoomcamp
+# Data Engineering Zoomcamp – Local Development Environment
 
-This guide provides a complete local development environment using Docker. By the end of this setup, you will have:
-* **PostgreSQL 17** – Data storage (NYC Taxi data).
-* **pgAdmin 4** – Graphical interface for database management.
-* **Kestra** – Workflow orchestration and ELT pipeline management.
+This repository contains a complete local setup for the **Data Engineering Zoomcamp** using Docker Compose.
 
----
+It includes:
+- **PostgreSQL** – for storing NYC Taxi data
+- **pgAdmin** – web-based database management
+- **Kestra** – modern workflow orchestration (optional but highly recommended for later modules)
 
-## 🛠 Prerequisites
-* **Docker Desktop** (or Docker Engine + Compose for Linux).
-* **Resources:** Allocate at least 4GB of RAM to Docker.
-* **Storage:** ~5-10GB free disk space.
-
----
-
-## 🚀 Installation Steps
-
-### 1. Create Project Directory
-```bash
-mkdir data-engineering-zoomcamp
-cd data-engineering-zoomcamp
+## Project Structure (Recommended)
 
 ```
+data-engineering-zoomcamp/
+├── README.md
+├── docker-compose-postgres.yml     # PostgreSQL + pgAdmin
+├── docker-compose-kestra.yml       # Kestra (connects to PostgreSQL)
+├── postgres-init/
+│   └── 01-create-kestra-db.sql     # Creates the `kestra` database
+└── flows/                          # (optional) Place your Kestra YAML flows here
+```
 
-### 2. Create the Docker Compose File
+## Requirements
 
-Create a file named `docker-compose.yml` and paste the following configuration:
+- Docker Desktop (or Docker + Docker Compose)
+- At least 4–6 GB RAM available
+- ~5–10 GB free disk space
+
+## 1. PostgreSQL + pgAdmin Setup
+
+### docker-compose-postgres.yml
 
 ```yaml
 version: "3.8"
+
 services:
   db:
     container_name: postgres
@@ -46,7 +57,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - vol-pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -64,25 +75,82 @@ services:
     ports:
       - "8081:80"
     volumes:
-      - vol-pgadmin_data:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - db
 
+volumes:
+  pgdata:
+  pgadmin_data:
+```
+
+### Create the init script (required for Kestra)
+
+```bash
+mkdir -p postgres-init
+```
+
+Create file `postgres-init/01-create-kestra-db.sql`:
+
+```sql
+CREATE DATABASE kestra;
+```
+
+### Start PostgreSQL + pgAdmin
+
+```bash
+docker compose -f docker-compose-postgres.yml up -d
+```
+
+Wait 30–60 seconds, then check:
+
+```bash
+docker compose -f docker-compose-postgres.yml ps
+```
+
+Open pgAdmin:  
+**http://localhost:8081**  
+Email: `pgadmin@pgadmin.com`  
+Password: `pgadmin`
+
+### PostgreSQL Connection Details
+
+From your host machine (laptop / scripts):
+
+| Parameter       | Value                        |
+|-----------------|------------------------------|
+| Host            | `localhost`                  |
+| Port            | `5433`                       |
+| Database        | `ny_taxi`                    |
+| Username        | `postgres`                   |
+| Password        | `postgres`                   |
+
+Connection string example:
+```
+postgresql://postgres:postgres@localhost:5433/ny_taxi
+```
+
+## 2. Kestra Setup (Recommended: Separate File)
+
+### docker-compose-kestra.yml
+
+```yaml
+version: "3.8"
+
+services:
   kestra:
     image: kestra/kestra:latest
     container_name: kestra
     restart: unless-stopped
     pull_policy: always
     user: "root"
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       - "8080:8080"
     volumes:
       - kestra_storage:/app/storage
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
+    command: server standalone
     environment:
       KESTRA_CONFIGURATION: |
         kestra:
@@ -90,7 +158,7 @@ services:
             basic-auth:
               enabled: true
               username: admin
-              password: kestra123
+              password: kestra123           # ← CHANGE THIS !!!
           repository:
             type: postgres
           storage:
@@ -105,72 +173,87 @@ services:
               path: "/tmp/kestra-wd"
         datasources:
           postgres:
-            url: jdbc:postgresql://db:5432/kestra
+            url: jdbc:postgresql://host.docker.internal:5432/kestra
             driverClassName: org.postgresql.Driver
             username: postgres
             password: postgres
 
 volumes:
-  vol-pgdata:
-  vol-pgadmin_data:
   kestra_storage:
-
 ```
 
-### 3. Initialize Kestra Database
+**Note:**  
+- Use `host.docker.internal` (macOS/Windows) or `172.17.0.1` (Linux) to connect to the local PostgreSQL.
 
-Kestra needs its own database within the Postgres instance. Run these commands to create the init script:
+### Start Kestra
+
+First ensure PostgreSQL is running, then:
 
 ```bash
-mkdir -p postgres-init
-echo "CREATE DATABASE kestra;" > postgres-init/01-create-kestra-db.sql
-
+docker compose -f docker-compose-kestra.yml up -d
 ```
 
-### 4. Launch the Stack
+Open Kestra UI:  
+**http://localhost:8080**  
+Username: `admin`  
+Password: `kestra123`
+
+## Quick Commands Reference
 
 ```bash
-docker compose up -d
+# Start PostgreSQL + pgAdmin
+docker compose -f docker-compose-postgres.yml up -d
 
+# Start Kestra
+docker compose -f docker-compose-kestra.yml up -d
+
+# Stop everything
+docker compose -f docker-compose-postgres.yml down
+docker compose -f docker-compose-kestra.yml down
+
+# Stop + delete data (careful!)
+docker compose -f docker-compose-postgres.yml down -v
+
+# View logs
+docker compose -f docker-compose-postgres.yml logs -f
+docker compose -f docker-compose-kestra.yml logs -f kestra
+
+# PostgreSQL shell
+docker exec -it postgres psql -U postgres -d ny_taxi
+
+# Check databases
+docker exec -it postgres psql -U postgres -c "\l"
 ```
 
-*Wait a minute or two for images to download and services to initialize.*
+## Troubleshooting
+
+- **Kestra says "database kestra does not exist"** → Make sure `postgres-init/01-create-kestra-db.sql` exists and PostgreSQL was started **after** creating it. Or manually run `CREATE DATABASE kestra;` in psql.
+- **pgAdmin / Kestra not loading** → Check port conflicts (8080, 8081, 5433)
+- **Connection refused** → Wait 60–90 seconds after starting
+- **Port in use** → Change ports in the compose files
+
+## Security Notice
+
+These credentials are **ONLY for local development**:
+
+```
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+PGADMIN_DEFAULT_PASSWORD=pgadmin
+KESTRA_ADMIN_PASSWORD=kestra123
+```
+
+**Do NOT use these in production or expose ports publicly.**
 
 ---
 
-## 🔗 Service Access
+Happy learning with Data Engineering Zoomcamp! 🚀  
+Questions? Feel free to open an issue or ask in the course Slack.
+```
 
-| Service | Access URL | Credentials |
-| --- | --- | --- |
-| **Kestra** | [http://localhost:8080](https://www.google.com/search?q=http://localhost:8080) | `admin` / `kestra123` |
-| **pgAdmin** | [http://localhost:8081](https://www.google.com/search?q=http://localhost:8081) | `pgadmin@pgadmin.com` / `pgadmin` |
+This version is **self-contained**, **well-organized**, and **ready to use**.
 
-### Database Connection (Local Host)
-
-To connect using an external tool (like DBeaver or Python):
-
-* **Host:** `localhost`
-* **Port:** `5433`
-* **User/Pass:** `postgres` / `postgres`
-* **DB:** `ny_taxi`
-
----
-
-## 🛠 Useful Commands
-
-| Command | Description |
-| --- | --- |
-| `docker compose ps` | Check if services are running |
-| `docker compose logs -f` | Tail logs for all services |
-| `docker compose down` | Stop services (preserves data) |
-| `docker compose down -v` | Stop services and **delete all data** |
-| `docker exec -it postgres psql -U postgres -d ny_taxi` | Open SQL shell in terminal |
-
----
-
-## ❓ Troubleshooting
-
-* **Port 8080/8081 in use:** Change the first number in the `ports` section of the yaml (e.g., `8082:80`).
-* **Kestra login fails:** Ensure the `KESTRA_CONFIGURATION` block in the yaml is indented correctly.
-* **Empty pgAdmin:** You must manually add a "New Server" in pgAdmin using the hostname `db`, port `5432`, and your postgres credentials.
-
+Let me know if you want:
+- A **combined single compose file** version instead
+- Sections for **loading NYC Taxi data** or **example Kestra flows**
+- A shorter / more minimal version
