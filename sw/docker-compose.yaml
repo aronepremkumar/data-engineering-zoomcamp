@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  db:
+    container_name: postgres
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ny_taxi               # default db when connecting without specifying one
+      # We will create the kestra database automatically via init script
+    ports:
+      - "5433:5432"
+    volumes:
+      - vol-pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d   # ← folder for init scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+    ports:
+      - "8081:80"           # ← changed to 8081 to avoid conflict with Kestra UI
+    volumes:
+      - vol-pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra
+    restart: unless-stopped
+    pull_policy: always
+    user: "root"                        # needed for Docker-in-Docker + most plugins
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"                     # Kestra UI + API
+    volumes:
+      - kestra_storage:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock   # allows running Docker tasks
+      - /tmp:/tmp                           # working directory for many tasks
+    environment:
+      KESTRA_CONFIGURATION: |
+        kestra:
+          server:
+            basic-auth:
+              enabled: true
+              username: admin
+              password: kestra123               # ← CHANGE THIS in production!
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              basePath: "/app/storage"
+          queue:
+            type: postgres
+          url: "http://localhost:8080/"         # used in emails, webhooks, etc.
+          tasks:
+            tmpDir:
+              path: "/tmp/kestra-wd"
+        datasources:
+          postgres:
+            url: jdbc:postgresql://db:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: postgres
+            password: postgres
+
+volumes:
+  vol-pgdata:
+    name: vol-pgdata
+  vol-pgadmin_data:
+    name: vol-pgadmin_data
+  kestra_storage:
+    name: kestra_storage
