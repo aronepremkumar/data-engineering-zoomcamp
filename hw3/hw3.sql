@@ -1,6 +1,6 @@
 
 
-
+-- sql for homework 3 ---
 CREATE OR REPLACE EXTERNAL TABLE `de-zoomcamp-2026-485504.ny_taxi_2024.yellow_taxi_external`
 OPTIONS (
   format = 'PARQUET',
