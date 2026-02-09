@@ -20,8 +20,8 @@ services:
           server:
             basic-auth:
               enabled: true
-              username: admin
-              password: kestra123           # ← CHANGE THIS
+              username: admin@kestra.io
+              password: Password123
           repository:
             type: postgres
           storage:
@@ -30,17 +30,13 @@ services:
               basePath: "/app/storage"
           queue:
             type: postgres
-          url: "http://localhost:8080/"
-          tasks:
-            tmpDir:
-              path: "/tmp/kestra-wd"
+          url: "http://localhost:8080"
         datasources:
           postgres:
-            url: jdbc:postgresql://host.docker.internal:5432/kestra
+            url: jdbc:postgresql://host.docker.internal:5433/kestra
             driverClassName: org.postgresql.Driver
             username: postgres
             password: postgres
-    depends_on: []  # we'll start it after postgres is healthy
 
 volumes:
   kestra_storage:
