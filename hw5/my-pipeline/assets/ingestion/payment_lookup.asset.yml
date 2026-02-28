@@ -1,0 +1,37 @@
+# Seed Asset: Load a local CSV file as a lookup table
+#
+# Docs: https://getbruin.com/docs/bruin/assets/seed
+#
+# Seed assets let you load CSV files directly into your data platform.
+# This is useful for small, static reference/lookup data.
+
+name: ingestion.payment_lookup
+
+# Required for DuckDB: this tells Bruin to treat it as a DuckDB seed (CSV loader)
+type: duckdb.seed
+
+# Path to the CSV file (relative to this .asset.yml file).
+# Assumes payment_lookup.csv is in the same folder as this file (assets/ingestion/).
+# If it's elsewhere, adjust the path (e.g., ../data/payment_lookup.csv)
+parameters:
+  path: payment_lookup.csv
+
+# Define columns with types, descriptions, primary key, and quality checks.
+# These are enforced during load/validation (since enforce_schema defaults to true).
+# NYC Taxi payment types typically: payment_type_id (1-6), payment_type_name (descriptions)
+columns:
+  - name: payment_type_id
+    type: integer
+    description: Unique identifier for the payment type (e.g., 1 = Credit card, 2 = Cash)
+    primary_key: true
+    checks:
+      - name: not_null
+      - name: unique
+  - name: payment_type_name
+    type: string
+    description: Human-readable name of the payment type (e.g., "Credit card", "Cash", "No charge")
+    checks:
+      - name: not_null
+
+# Optional: If you want to disable strict schema enforcement (Bruin infers types from CSV)
+# enforce_schema: false

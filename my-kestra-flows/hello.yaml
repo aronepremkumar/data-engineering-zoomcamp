@@ -1,0 +1,7 @@
+id: hello-world
+namespace: beginner
+tasks:
+  - id: say-hello
+    type: io.kestra.plugin.scripts.shell.Commands
+    commands:
+      - echo "Hello, World! From Kestra."
